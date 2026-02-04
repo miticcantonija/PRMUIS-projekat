@@ -5,6 +5,11 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+	  <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Biblioteka\Biblioteka.csproj" />
+  </ItemGroup>
 
 </Project>
