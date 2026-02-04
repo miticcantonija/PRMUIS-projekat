@@ -147,7 +147,8 @@ namespace BibliotekaServer
             Console.WriteLine("\n--- Rucni unos knjige ---");
             Console.Write("Naslov: "); string n = Console.ReadLine();
             Console.Write("Autor: "); string a = Console.ReadLine();
-            _knjige.Add(new Knjiga { Naslov = n, Autor = a, Kolicina = 5 });
+            Console.Write("Kolicina: "); int.TryParse(Console.ReadLine(), out int kol);
+            _knjige.Add(new Knjiga { Naslov = n, Autor = a, Kolicina= kol });
             Console.WriteLine("Knjiga uspesno dodata.");
         }
 
