@@ -39,6 +39,7 @@ namespace BibliotekaServer
             Console.WriteLine("---------------------------------------");
             Console.WriteLine("Komande: [1] Dodaj rucno | [2] Lista | [0] Izlaz\n");
 
+            UcitajKnjigeIzFajla();
             while (true)
             {
                 // Priprema liste za Select (osluškujemo listen soket, udp i sve povezane klijente)
@@ -90,12 +91,7 @@ namespace BibliotekaServer
                                 BinaryFormatter bf = new BinaryFormatter();
                                 Poruka p = (Poruka)bf.Deserialize(ms);
 
-                                if (p.TipPoruke == "DODAJ")
-                                {
-                                    _knjige.Add(p.KnjigaPodaci);
-                                    Console.WriteLine($"\n[DODAJ] Klijent {p.KlijentID} dodao: {p.KnjigaPodaci.Naslov}");
-                                }
-                                else if (p.TipPoruke == "IZNAJMI")
+                                if (p.TipPoruke == "IZNAJMI")
                                 {
                                     // Tražimo knjigu u listi
                                     var knjiga = _knjige.Find(k => k.Naslov.Equals(p.KnjigaPodaci.Naslov, StringComparison.OrdinalIgnoreCase));
@@ -116,11 +112,35 @@ namespace BibliotekaServer
 
                                         odgovor = $"USPESNO|{novo.DatumVracanja}";
                                         Console.WriteLine($"\n[IZNAJMI] Klijent {p.KlijentID} iznajmio: {knjiga.Naslov}");
+                                        SacuvajKnjigeUFajl();
                                     }
 
                                     // ŠALJEMO ODGOVOR KLIJENTU (Ovo je novo!)
                                     byte[] odgovorBytes = Encoding.UTF8.GetBytes(odgovor);
                                     s.Send(odgovorBytes);
+                                }
+                                else if (p.TipPoruke == "VRATI")
+                                {
+                                    // 1. Pronađi knjigu u biblioteci da povećaš količinu
+                                    var knjiga = _knjige.Find(k => k.Naslov.Equals(p.KnjigaPodaci.Naslov, StringComparison.OrdinalIgnoreCase));
+
+                                    // 2. Pronađi i ukloni zapis iz liste iznajmljivanja
+                                    // Tražimo zapis gde je taj klijent iznajmio tu knjigu
+                                    var iznajmljivanje = _iznajmljivanja.Find(i => i.ClanID == p.KlijentID && i.KnjigaInfo.Contains(p.KnjigaPodaci.Naslov));
+
+                                    if (knjiga != null)
+                                    {
+                                        knjiga.Kolicina++; // Vraćamo primerak u biblioteku
+                                        if (iznajmljivanje != null) _iznajmljivanja.Remove(iznajmljivanje); // Brišemo iz evidencije
+
+                                        Console.WriteLine($"\n[VRATI] Klijent {p.KlijentID} vratio knjigu: {knjiga.Naslov}");
+                                        s.Send(Encoding.UTF8.GetBytes("VRACENO_OK"));
+                                    }
+                                    else
+                                    {
+                                        s.Send(Encoding.UTF8.GetBytes("GRESKA_NASLOV"));
+                                    }
+                                    SacuvajKnjigeUFajl();
                                 }
                             }
                         }
@@ -146,6 +166,40 @@ namespace BibliotekaServer
         }
 
         // --- POMOĆNE METODE ---
+        private static void UcitajKnjigeIzFajla()
+        {
+            if (File.Exists("knjige_baza.txt"))
+            {
+                string[] linije = File.ReadAllLines("knjige_baza.txt");
+                _knjige.Clear();
+                foreach (var l in linije)
+                {
+                    var delovi = l.Split('|');
+                    if (delovi.Length == 3)
+                    {
+                        _knjige.Add(new Knjiga
+                        {
+                            Naslov = delovi[0],
+                            Autor = delovi[1],
+                            Kolicina = int.Parse(delovi[2])
+                        });
+                    }
+                }
+                Console.WriteLine($"[BAZA] Učitano {_knjige.Count} knjiga iz fajla.");
+            }
+        }
+
+        private static void SacuvajKnjigeUFajl()
+        {
+            List<string> linije = new List<string>();
+            foreach (var k in _knjige)
+            {
+                // Čuvamo u formatu: Naslov|Autor|Kolicina
+                linije.Add($"{k.Naslov}|{k.Autor}|{k.Kolicina}");
+            }
+            File.WriteAllLines("knjige_baza.txt", linije);
+        }
+
 
         private static string ObradiUdpZahtev(string zahtev)
         {
@@ -181,6 +235,7 @@ namespace BibliotekaServer
             Console.Write("Autor: "); string a = Console.ReadLine();
             Console.Write("Kolicina: "); int.TryParse(Console.ReadLine(), out int kol);
             _knjige.Add(new Knjiga { Naslov = n, Autor = a, Kolicina= kol });
+            SacuvajKnjigeUFajl();
             Console.WriteLine("Knjiga uspesno dodata.");
         }
 

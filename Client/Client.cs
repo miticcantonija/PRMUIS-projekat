@@ -34,36 +34,17 @@ namespace BibliotekaKlijent
 
                 while (true)
                 {
-                    Console.WriteLine("\n========== KLIJENT MENI ==========");
-                    Console.WriteLine("1 - Pošalji novu knjigu (TCP)");
-                    Console.WriteLine("2 - Proveri dostupnost (UDP)");
-                    Console.WriteLine("3 - Preuzmi listu svih knjiga (UDP)");
-                    Console.WriteLine("4 - IZNAJMI KNJIGU (TCP)"); // NOVA OPCIJA
-                    Console.WriteLine("5 - Pogledaj moje iznajmljene knjige (Lokalno)"); // NOVA OPCIJA
-                    Console.WriteLine("0 - Izlaz");
+                    Console.WriteLine("\n--- GLAVNI MENI ---");
+                    Console.WriteLine("1. Proveri dostupnost knjige (UDP)");
+                    Console.WriteLine("2. Preuzmi listu svih knjiga (UDP)");
+                    Console.WriteLine("3. IZNAJMI KNJIGU (TCP)");
+                    Console.WriteLine("4. VRATI KNJIGU (TCP)");
+                    Console.WriteLine("5. Pregledaj moje iznajmljene knjige (FAJL)");
+                    Console.WriteLine("0. Izlaz");
                     Console.Write("Izbor: ");
                     string izbor = Console.ReadLine();
 
                     if (izbor == "1")
-                    {
-                        // SLANJE KNJIGE PREKO TCP-A
-                        Knjiga k = new Knjiga();
-                        Console.Write("Naslov: "); k.Naslov = Console.ReadLine();
-                        Console.Write("Autor: "); k.Autor = Console.ReadLine();
-                        Console.Write("Količina: ");
-                        k.Kolicina = int.TryParse(Console.ReadLine(), out int kol) ? kol : 1;
-
-                        Poruka p = new Poruka { KlijentID = mojID, KnjigaPodaci = k };
-
-                        using (MemoryStream ms = new MemoryStream())
-                        {
-                            BinaryFormatter bf = new BinaryFormatter();
-                            bf.Serialize(ms, p);
-                            klijentTcp.Send(ms.ToArray());
-                        }
-                        Console.WriteLine("[TCP] Knjiga poslata sa tvojim ID-em.");
-                    }
-                    else if (izbor == "2")
                     {
                         // UPIT ZA KNJIGU PREKO UDP-A
                         Console.Write("Unesite naslov za proveru: ");
@@ -77,7 +58,7 @@ namespace BibliotekaKlijent
                         int n = klijentUdp.ReceiveFrom(buffer, ref remote);
                         Console.WriteLine("\n[UDP ODGOVOR]: " + Encoding.UTF8.GetString(buffer, 0, n));
                     }
-                    else if (izbor == "3")
+                    else if (izbor == "2")
                     {
                         // UPIT ZA LISTU PREKO UDP-A
                         byte[] data = Encoding.UTF8.GetBytes("LISTA:SVE");
@@ -89,7 +70,7 @@ namespace BibliotekaKlijent
                         int n = klijentUdp.ReceiveFrom(buffer, ref remote);
                         Console.WriteLine("\n[LISTA KNJIGA]:\n" + Encoding.UTF8.GetString(buffer, 0, n));
                     }
-                    else if (izbor == "4") // IZNAJMLJIVANJE
+                    else if (izbor == "3") // IZNAJMLJIVANJE
                     {
                         Console.Write("Unesite tačan naslov knjige koju želite da iznajmite: ");
                         string naslov = Console.ReadLine();
@@ -128,6 +109,61 @@ namespace BibliotekaKlijent
                         else
                         {
                             Console.WriteLine("\n[GREŠKA] Server je odbio zahtev. Knjiga možda nije na stanju.");
+                        }
+                    }
+                    else if (izbor == "4") // VRATITI KNJIGU
+                    {
+                        Console.Write("Unesite naslov knjige koju vracate: ");
+                        string naslovZaVracanje = Console.ReadLine();
+
+                        Poruka p = new Poruka
+                        {
+                            KlijentID = mojID,
+                            KnjigaPodaci = new Knjiga { Naslov = naslovZaVracanje },
+                            TipPoruke = "VRATI"
+                        };
+
+                        // 1. Slanje zahteva serveru
+                        using (MemoryStream ms = new MemoryStream())
+                        {
+                            new BinaryFormatter().Serialize(ms, p);
+                            klijentTcp.Send(ms.ToArray());
+                        }
+
+                        // 2. Prijem potvrde
+                        byte[] buf = new byte[256];
+                        int n = klijentTcp.Receive(buf);
+                        string odgovor = Encoding.UTF8.GetString(buf, 0, n);
+
+                        if (odgovor == "VRACENO_OK")
+                        {
+                            Console.WriteLine("[USPEH] Server je potvrdio vracanje.");
+
+                            // 3. Brisanje iz lokalnog fajla
+                            if (File.Exists("iznajmljeno.txt"))
+                            {
+                                var linije = File.ReadAllLines("iznajmljeno.txt");
+                                // Zadržavamo sve linije OSIM one koja sadrži naslov te knjige
+                                var noveLinije = new List<string>();
+                                bool obrisano = false;
+
+                                foreach (var linija in linije)
+                                {
+                                    if (!obrisano && linija.Contains(naslovZaVracanje))
+                                    {
+                                        obrisano = true; // Preskačemo ovu liniju (brišemo je)
+                                        continue;
+                                    }
+                                    noveLinije.Add(linija);
+                                }
+
+                                File.WriteAllLines("iznajmljeno.txt", noveLinije);
+                                Console.WriteLine("Knjiga uklonjena iz lokalne evidencije.");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("[GRESKA] Server nije prepoznao naslov.");
                         }
                     }
                     else if (izbor == "5") // PREGLED LOKALNOG FAJLA
