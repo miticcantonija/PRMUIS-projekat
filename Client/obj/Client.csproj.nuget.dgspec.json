@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Client\\Client.csproj": {}
+    "D:\\projekat\\Client\\Client.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Biblioteka\\Biblioteka.csproj": {
+    "D:\\projekat\\Biblioteka\\Biblioteka.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Biblioteka\\Biblioteka.csproj",
+        "projectUniqueName": "D:\\projekat\\Biblioteka\\Biblioteka.csproj",
         "projectName": "Biblioteka",
-        "projectPath": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Biblioteka\\Biblioteka.csproj",
-        "packagesPath": "C:\\Users\\Nikola\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Biblioteka\\obj\\",
+        "projectPath": "D:\\projekat\\Biblioteka\\Biblioteka.csproj",
+        "packagesPath": "C:\\Users\\pc\\.nuget\\packages\\",
+        "outputPath": "D:\\projekat\\Biblioteka\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Nikola\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\pc\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -65,24 +65,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.301/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Client\\Client.csproj": {
+    "D:\\projekat\\Client\\Client.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Client\\Client.csproj",
+        "projectUniqueName": "D:\\projekat\\Client\\Client.csproj",
         "projectName": "Client",
-        "projectPath": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Client\\Client.csproj",
-        "packagesPath": "C:\\Users\\Nikola\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Client\\obj\\",
+        "projectPath": "D:\\projekat\\Client\\Client.csproj",
+        "packagesPath": "C:\\Users\\pc\\.nuget\\packages\\",
+        "outputPath": "D:\\projekat\\Client\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Nikola\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\pc\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -97,8 +97,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Biblioteka\\Biblioteka.csproj": {
-                "projectPath": "C:\\Users\\Nikola\\Desktop\\PrmiusProjekat\\Biblioteka\\Biblioteka.csproj"
+              "D:\\projekat\\Biblioteka\\Biblioteka.csproj": {
+                "projectPath": "D:\\projekat\\Biblioteka\\Biblioteka.csproj"
               }
             }
           }
@@ -134,7 +134,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.301/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

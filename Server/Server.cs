@@ -17,6 +17,7 @@ namespace BibliotekaServer
 
         private static List<Knjiga> _knjige = new List<Knjiga>();
         private static List<Socket> _klijenti = new List<Socket>();
+        private static List<Iznajmljivanje> _iznajmljivanja = new List<Iznajmljivanje>();
         private static int _nextClientId = 10550;
 
         static void Main(string[] args)
@@ -41,6 +42,7 @@ namespace BibliotekaServer
             while (true)
             {
                 // Priprema liste za Select (osluškujemo listen soket, udp i sve povezane klijente)
+
                 List<Socket> readList = new List<Socket> { tcpListen, udpSocket };
                 readList.AddRange(_klijenti);
 
@@ -88,8 +90,38 @@ namespace BibliotekaServer
                                 BinaryFormatter bf = new BinaryFormatter();
                                 Poruka p = (Poruka)bf.Deserialize(ms);
 
-                                _knjige.Add(p.KnjigaPodaci);
-                                Console.WriteLine($"\n[TCP] Klijent {p.KlijentID} dodao knjigu: {p.KnjigaPodaci.Naslov}");
+                                if (p.TipPoruke == "DODAJ")
+                                {
+                                    _knjige.Add(p.KnjigaPodaci);
+                                    Console.WriteLine($"\n[DODAJ] Klijent {p.KlijentID} dodao: {p.KnjigaPodaci.Naslov}");
+                                }
+                                else if (p.TipPoruke == "IZNAJMI")
+                                {
+                                    // Tražimo knjigu u listi
+                                    var knjiga = _knjige.Find(k => k.Naslov.Equals(p.KnjigaPodaci.Naslov, StringComparison.OrdinalIgnoreCase));
+                                    string odgovor = "NEUSPESNO";
+
+                                    if (knjiga != null && knjiga.Kolicina > 0)
+                                    {
+                                        knjiga.Kolicina--; // Smanjujemo stanje
+
+                                        // Kreiramo zapis o iznajmljivanju
+                                        Iznajmljivanje novo = new Iznajmljivanje
+                                        {
+                                            KnjigaInfo = $"{knjiga.Naslov} - {knjiga.Autor}",
+                                            ClanID = p.KlijentID,
+                                            DatumVracanja = DateTime.Now.AddDays(14).ToString("dd.MM.yyyy")
+                                        };
+                                        _iznajmljivanja.Add(novo);
+
+                                        odgovor = $"USPESNO|{novo.DatumVracanja}";
+                                        Console.WriteLine($"\n[IZNAJMI] Klijent {p.KlijentID} iznajmio: {knjiga.Naslov}");
+                                    }
+
+                                    // ŠALJEMO ODGOVOR KLIJENTU (Ovo je novo!)
+                                    byte[] odgovorBytes = Encoding.UTF8.GetBytes(odgovor);
+                                    s.Send(odgovorBytes);
+                                }
                             }
                         }
                         catch

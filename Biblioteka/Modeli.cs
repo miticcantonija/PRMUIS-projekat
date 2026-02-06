@@ -16,5 +16,14 @@ namespace Biblioteka.Modeli
     {
         public int KlijentID { get; set; }
         public Knjiga KnjigaPodaci { get; set; }
+        public string TipPoruke { get; set; }
+    }
+
+    [Serializable]
+    public class Iznajmljivanje
+    {
+        public string KnjigaInfo { get; set; } // Naslov i Autor
+        public int ClanID { get; set; }
+        public string DatumVracanja { get; set; }
     }
 }
