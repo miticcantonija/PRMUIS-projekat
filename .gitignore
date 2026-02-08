@@ -1,9 +1,24 @@
+# Visual Studio
 .vs/
-
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
 
+# Build folders
 bin/
 obj/
+**/bin/
+**/obj/
+
+# .NET build artifacts
+**/*.AssemblyInfo.cs
+**/*.AssemblyInfoInputs.cache
+**/*.assets.cache
+**/*.nuget.g.props
+**/*.nuget.g.targets
+**/project.assets.json
+**/project.nuget.cache
+
+# Logs
+*.log
