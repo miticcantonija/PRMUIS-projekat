@@ -1,11 +1,9 @@
 ﻿#pragma warning disable SYSLIB0011
-using System;
 using System.Net;
 using System.Net.Sockets;
-using System.IO;
 using System.Text;
 using System.Runtime.Serialization.Formatters.Binary;
-using Biblioteka.Modeli; // Namespace tvoje zajedničke biblioteke
+using Biblioteka.Modeli;
 
 namespace BibliotekaKlijent
 {
@@ -25,12 +23,23 @@ namespace BibliotekaKlijent
             {
                 tcpSocket.Connect(new IPEndPoint(IPAddress.Loopback, TCP_PORT));
 
-                // Prva stvar: Server šalje dodeljeni ID
+                // Prva stvar: Server salje dodeljeni ID
                 byte[] idBuffer = new byte[1024];
                 int primljenoID = tcpSocket.Receive(idBuffer);
                 _mojID = int.Parse(Encoding.UTF8.GetString(idBuffer, 0, primljenoID));
 
                 Console.WriteLine($"[SISTEM] Povezan na server. Vaš ID: {_mojID}");
+
+                
+                if (tcpSocket.Poll(300*1000, SelectMode.SelectRead)) // 300ms
+                {
+                    byte[] warnBuf = new byte[4096];
+                    int got = tcpSocket.Receive(warnBuf);
+                    if (got > 0)
+                    {
+                        Console.WriteLine("\n" + Encoding.UTF8.GetString(warnBuf, 0, got));
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -54,7 +63,7 @@ namespace BibliotekaKlijent
 
                 switch (izbor)
                 {
-                    case "1": PretražiKnjiguUDP(); break;
+                    case "1": PretraziKnjiguUDP(); break;
                     case "2": PreuzmiListuUDP(); break;
                     case "3": IznajmiVratiTCP(tcpSocket, "IZNAJMI"); break;
                     case "4": IznajmiVratiTCP(tcpSocket, "VRATI"); break;
@@ -70,7 +79,7 @@ namespace BibliotekaKlijent
         }
 
         // --- UDP KOMUNIKACIJA (Polling model) ---
-        private static void PošaljiUdpZahtev(string poruka)
+        private static void PosaljiUdpZahtev(string poruka)
         {
             Socket udp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             IPEndPoint serverEP = new IPEndPoint(IPAddress.Loopback, UDP_PORT);
@@ -78,8 +87,8 @@ namespace BibliotekaKlijent
             byte[] podaci = Encoding.UTF8.GetBytes(poruka);
             udp.SendTo(podaci, serverEP);
 
-            // Čekamo odgovor maksimalno 1 sekundu (Polling)
-            if (udp.Poll(1000000, SelectMode.SelectRead))
+            // Cekamo odgovor maksimalno 1 sekundu (Polling)
+            if (udp.Poll(1000*1000, SelectMode.SelectRead))
             {
                 EndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
                 byte[] buffer = new byte[2048];
@@ -90,22 +99,23 @@ namespace BibliotekaKlijent
             {
                 Console.WriteLine("\n[INFO] Server (UDP) nije odgovorio. Proverite da li je upaljen.");
             }
+
             udp.Close();
         }
 
-        private static void PretražiKnjiguUDP()
+        private static void PretraziKnjiguUDP()
         {
             Console.Write("Unesite naslov za proveru: ");
-            string ?naslov = Console.ReadLine();
-            PošaljiUdpZahtev("PROVERA:" + naslov);
+            string? naslov = Console.ReadLine();
+            PosaljiUdpZahtev("PROVERA:" + naslov);
         }
 
         private static void PreuzmiListuUDP()
         {
-            PošaljiUdpZahtev("LISTA:SVE");
+            PosaljiUdpZahtev("LISTA:SVE");
         }
 
-        // --- TCP KOMUNIKACIJA (Iznajmljivanje i Vraćanje) ---
+        // TCP KOMUNIKACIJA (Iznajmljivanje i Vracanje)
         private static void IznajmiVratiTCP(Socket s, string tip)
         {
             Console.Write($"Unesite naslov knjige koju želite da {(tip == "IZNAJMI" ? "iznajmite" : "vratite")}: ");
@@ -128,8 +138,8 @@ namespace BibliotekaKlijent
                     s.Send(ms.ToArray());
                 }
 
-                // POLLING: Čekamo odgovor servera (max 2 sekunde)
-                if (s.Poll(2000000, SelectMode.SelectRead))
+                // Cekamo odgovor servera (max 2 sekunde)
+                if (s.Poll(2000*1000, SelectMode.SelectRead))
                 {
                     byte[] buffer = new byte[1024];
                     int primljeno = s.Receive(buffer);
@@ -137,7 +147,6 @@ namespace BibliotekaKlijent
 
                     if (odgovor.StartsWith("USPESNO"))
                     {
-
                         string datum = odgovor.Contains("|") ? odgovor.Split('|')[1] : "nepoznat";
                         Console.WriteLine($"\n[INFO] Uspešno iznajmljeno! Rok: {datum}");
                         SacuvajLokalno(naslov, datum, _mojID);
@@ -145,7 +154,7 @@ namespace BibliotekaKlijent
                     else if (odgovor == "VRACENO_OK")
                     {
                         Console.WriteLine("\n[INFO] Knjiga uspešno vraćena u biblioteku.");
-                        UkloniLokalno(naslov,_mojID);
+                        UkloniLokalno(naslov, _mojID);
                     }
                     else if (odgovor == "NEUSPESNO")
                     {
@@ -169,7 +178,7 @@ namespace BibliotekaKlijent
 
         private static void SacuvajLokalno(string naslov, string datum, int mojID)
         {
-            // Fajl će se zvati npr. "iznajmljeno_10550.txt"
+            // Fajl ce se zvati npr: "iznajmljeno_10550.txt"
             string putanja = $"iznajmljeno_{mojID}.txt";
             File.AppendAllLines(putanja, new[] { $"{naslov} | Rok: {datum}" });
         }
@@ -207,7 +216,8 @@ namespace BibliotekaKlijent
             }
 
             string[] knjige = File.ReadAllLines(putanja);
-            foreach (var k in knjige) Console.WriteLine("- " + k);
+            foreach (var k in knjige)
+                Console.WriteLine("- " + k);
         }
     }
 }

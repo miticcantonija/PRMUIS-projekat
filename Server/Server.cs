@@ -1,9 +1,6 @@
 ﻿#pragma warning disable SYSLIB0011
-using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.IO;
 using System.Text;
 using System.Runtime.Serialization.Formatters.Binary;
 using Biblioteka.Modeli;
@@ -15,19 +12,23 @@ namespace BibliotekaServer
         private const int UDP_PORT = 5000;
         private const int TCP_PORT = 6000;
 
+        private const string KNJIGE_FAJL = "knjige_baza.txt";
+        private const string IZN_FAJL = "iznajmljivanja_baza.txt"; 
+
         private static List<Knjiga> _knjige = new List<Knjiga>();
         private static List<Socket> _klijenti = new List<Socket>();
         private static List<Iznajmljivanje> _iznajmljivanja = new List<Iznajmljivanje>();
+
         private static int _nextClientId = 10550;
 
         static void Main(string[] args)
         {
-            // 1. UDP SOKET - Polling model
+            // 1) UDP socket
             Socket udpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             udpSocket.Bind(new IPEndPoint(IPAddress.Any, UDP_PORT));
             udpSocket.Blocking = false;
 
-            // 2. TCP LISTEN SOKET - Polling model
+            // 2) TCP listen socket
             Socket tcpListen = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             tcpListen.Bind(new IPEndPoint(IPAddress.Any, TCP_PORT));
             tcpListen.Listen(10);
@@ -39,25 +40,32 @@ namespace BibliotekaServer
             Console.WriteLine("---------------------------------------");
             Console.WriteLine("Komande: [1] Dodaj rucno | [2] Lista | [0] Izlaz\n");
 
+            // ucitaj stanje na startu 
             UcitajKnjigeIzFajla();
+            UcitajIznajmljivanjaIzFajla();
+
+            // samo informativno na serveru
+            IspisiKasnjenjaNaServeru();
 
             while (true)
             {
-                // --- IZMENA 1: Polling za NOVE TCP KLIJENTE ---
+                // Novi TCP klijenti
                 if (tcpListen.Poll(1000, SelectMode.SelectRead))
                 {
                     Socket noviKlijent = tcpListen.Accept();
                     noviKlijent.Blocking = false;
                     _klijenti.Add(noviKlijent);
 
-                    byte[] idBytes = Encoding.UTF8.GetBytes(_nextClientId.ToString());
-                    noviKlijent.Send(idBytes);
+                    int dodeljenId = _nextClientId++;
+                    noviKlijent.Send(Encoding.UTF8.GetBytes(dodeljenId.ToString()));
 
-                    Console.WriteLine($"\n[TCP] Povezan klijent. Dodeljen ID: {_nextClientId}");
-                    _nextClientId++;
+                    Console.WriteLine($"\n[TCP] Povezan klijent. Dodeljen ID: {dodeljenId}");
+
+                    // ako klijent kasni, javi mu odmah
+                    PosaljiKasnjenjaKlijentuAkoPostoje(noviKlijent, dodeljenId);
                 }
 
-                // --- IZMENA 2: Polling za UDP UPITE ---
+                // UDP upiti
                 if (udpSocket.Poll(1000, SelectMode.SelectRead))
                 {
                     EndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
@@ -71,19 +79,18 @@ namespace BibliotekaServer
                     udpSocket.SendTo(odgovorBytes, remoteEP);
                 }
 
-                // --- IZMENA 3: Polling za SVAKOG POVEZANOG KLIJENTA ---
+                // TCP poruke od povezanih klijenata
                 for (int i = _klijenti.Count - 1; i >= 0; i--)
                 {
                     Socket s = _klijenti[i];
                     try
                     {
-                        // Proveravamo da li klijent šalje nešto (timeout 1ms)
                         if (s.Poll(1000, SelectMode.SelectRead))
                         {
                             byte[] buffer = new byte[4096];
                             int primljeno = s.Receive(buffer);
 
-                            if (primljeno == 0) // Klijent zatvorio vezu
+                            if (primljeno == 0)
                             {
                                 Console.WriteLine("\n[TCP] Klijent se regularno odjavio.");
                                 s.Close();
@@ -91,7 +98,6 @@ namespace BibliotekaServer
                                 continue;
                             }
 
-                            // Obrada primljene poruke
                             ObradiTcpPoruku(s, buffer, primljeno);
                         }
                     }
@@ -103,7 +109,7 @@ namespace BibliotekaServer
                     }
                 }
 
-                // RAD SA KONZOLOM SERVERA (Ostaje isto, ali sada brže reaguje)
+                // Server konzola komande
                 if (Console.KeyAvailable)
                 {
                     var kljuc = Console.ReadKey(true).Key;
@@ -114,7 +120,6 @@ namespace BibliotekaServer
             }
         }
 
-        // Izdvojena logika radi preglednosti polling petlje
         private static void ObradiTcpPoruku(Socket s, byte[] buffer, int duzina)
         {
             using (MemoryStream ms = new MemoryStream(buffer, 0, duzina))
@@ -130,74 +135,176 @@ namespace BibliotekaServer
                     if (knjiga != null && knjiga.Kolicina > 0)
                     {
                         knjiga.Kolicina--;
-                        Iznajmljivanje novo = new Iznajmljivanje
+
+                        var novo = new Iznajmljivanje
                         {
-                            KnjigaInfo = $"{knjiga.Naslov} - {knjiga.Autor}",
                             ClanID = p.KlijentID,
+                            KnjigaInfo = $"{knjiga.Naslov}|{knjiga.Autor}", 
                             DatumVracanja = DateTime.Now.AddDays(14).ToString("dd.MM.yyyy")
                         };
+
                         _iznajmljivanja.Add(novo);
+
+                        SacuvajKnjigeUFajl();
+                        SacuvajIznajmljivanjaUFajl(); 
+
                         odgovor = $"USPESNO|{novo.DatumVracanja}";
                         Console.WriteLine($"\n[IZNAJMI] Klijent {p.KlijentID} iznajmio: {knjiga.Naslov}");
-                        SacuvajKnjigeUFajl();
                     }
+
                     s.Send(Encoding.UTF8.GetBytes(odgovor));
                 }
                 else if (p.TipPoruke == "VRATI")
                 {
-                    Knjiga? knjiga = null;
-                    foreach (var k in _knjige)
-                    {
-                        if (k.Naslov.Equals(p.KnjigaPodaci.Naslov, StringComparison.OrdinalIgnoreCase))
-                        {
-                            knjiga = k;
-                            break;
-                        }
-                    }
-
-                    Iznajmljivanje? iznajmljivanje = null;
-                    foreach (var izn in _iznajmljivanja)
-                    {
-                        // Proveravamo da li je to taj klijent I da li je to ta knjiga
-                        if (izn.ClanID == p.KlijentID && izn.KnjigaInfo.Contains(p.KnjigaPodaci.Naslov))
-                        {
-                            iznajmljivanje = izn;
-                            break;
-                        }
-                    }
-
-                    if (knjiga != null)
-                    {
-                        knjiga.Kolicina++;
-                        if (iznajmljivanje != null) _iznajmljivanja.Remove(iznajmljivanje);
-                        Console.WriteLine($"\n[VRATI] Klijent {p.KlijentID} vratio knjigu: {knjiga.Naslov}");
-                        s.Send(Encoding.UTF8.GetBytes("VRACENO_OK"));
-                        SacuvajKnjigeUFajl();
-                    }
-                    else
+                    var knjiga = _knjige.Find(k => k.Naslov.Equals(p.KnjigaPodaci.Naslov, StringComparison.OrdinalIgnoreCase));
+                    if (knjiga == null)
                     {
                         s.Send(Encoding.UTF8.GetBytes("GRESKA_NASLOV"));
+                        return;
                     }
+
+                    // nadjii iznajmljivanje za tog klijenta i tu knjigu
+                    Iznajmljivanje? izn = null;
+                    for (int i = 0; i < _iznajmljivanja.Count; i++)
+                    {
+                        var item = _iznajmljivanja[i];
+                        if (item.ClanID == p.KlijentID)
+                        {
+                            // KnjigaInfo format: "Naslov|Autor"
+                            var parts = item.KnjigaInfo.Split('|');
+                            if (parts.Length >= 1 && parts[0].Equals(knjiga.Naslov, StringComparison.OrdinalIgnoreCase))
+                            {
+                                izn = item;
+                                break;
+                            }
+                        }
+                    }
+
+                    knjiga.Kolicina++;
+
+                    if (izn != null)
+                        _iznajmljivanja.Remove(izn);
+
+                    SacuvajKnjigeUFajl();
+                    SacuvajIznajmljivanjaUFajl();
+
+                    Console.WriteLine($"\n[VRATI] Klijent {p.KlijentID} vratio knjigu: {knjiga.Naslov}");
+                    s.Send(Encoding.UTF8.GetBytes("VRACENO_OK"));
                 }
             }
         }
-        // --- POMOĆNE METODE ---
+
+    
+
+        private static void UcitajIznajmljivanjaIzFajla()
+        {
+            _iznajmljivanja.Clear();
+
+            if (!File.Exists(IZN_FAJL))
+                return;
+
+            var lines = File.ReadAllLines(IZN_FAJL);
+            foreach (var line in lines)
+            {
+                // format: ClanID|Naslov|Autor|DatumVracanja(dd.MM.yyyy)
+                var p = line.Split('|');
+                if (p.Length < 4) continue;
+
+                if (!int.TryParse(p[0], out int clanId)) continue;
+
+                _iznajmljivanja.Add(new Iznajmljivanje
+                {
+                    ClanID = clanId,
+                    KnjigaInfo = $"{p[1]}|{p[2]}",
+                    DatumVracanja = p[3]
+                });
+            }
+
+            Console.WriteLine($"[BAZA] Učitano {_iznajmljivanja.Count} iznajmljivanja iz fajla.");
+        }
+
+        private static void SacuvajIznajmljivanjaUFajl()
+        {
+            List<string> lines = new List<string>();
+
+            foreach (var izn in _iznajmljivanja)
+            {
+                // KnjigaInfo: "Naslov|Autor"
+                var parts = izn.KnjigaInfo.Split('|');
+                string naslov = parts.Length > 0 ? parts[0] : "";
+                string autor = parts.Length > 1 ? parts[1] : "";
+
+                // format: ClanID|Naslov|Autor|DatumVracanja
+                lines.Add($"{izn.ClanID}|{naslov}|{autor}|{izn.DatumVracanja}");
+            }
+
+            File.WriteAllLines(IZN_FAJL, lines);
+        }
+
+        private static bool JeRokProsao(string datumVracanja)
+        {
+            if (!DateTime.TryParseExact(datumVracanja, "dd.MM.yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out DateTime rok))
+                return false; 
+
+            return DateTime.Now.Date > rok.Date;
+        }
+
+        private static void PosaljiKasnjenjaKlijentuAkoPostoje(Socket klijent, int clientId)
+        {
+            var kasni = new List<Iznajmljivanje>();
+            foreach (var izn in _iznajmljivanja)
+            {
+                if (izn.ClanID == clientId && JeRokProsao(izn.DatumVracanja))
+                    kasni.Add(izn);
+            }
+
+            if (kasni.Count == 0) return;
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("OPOMENA: Imate knjige koje nisu vraćene na vreme!");
+            foreach (var k in kasni)
+            {
+                var parts = k.KnjigaInfo.Split('|');
+                string naslov = parts.Length > 0 ? parts[0] : "";
+                string autor = parts.Length > 1 ? parts[1] : "";
+                sb.AppendLine($"- {naslov} ({autor}) | Rok: {k.DatumVracanja}");
+            }
+
+            
+            klijent.Send(Encoding.UTF8.GetBytes(sb.ToString()));
+        }
+
+        private static void IspisiKasnjenjaNaServeru()
+        {
+            int cnt = 0;
+            foreach (var izn in _iznajmljivanja)
+                if (JeRokProsao(izn.DatumVracanja))
+                    cnt++;
+
+            if (cnt > 0)
+                Console.WriteLine($"[INFO] Postoji {cnt} iznajmljivanja kojima je rok prošao.");
+        }
+
+     
         private static void UcitajKnjigeIzFajla()
         {
-            if (File.Exists("knjige_baza.txt"))
+            if (File.Exists(KNJIGE_FAJL))
             {
-                string[] linije = File.ReadAllLines("knjige_baza.txt");
+                string[] linije = File.ReadAllLines(KNJIGE_FAJL);
                 _knjige.Clear();
+
                 foreach (var l in linije)
                 {
                     var delovi = l.Split('|');
-                    if (delovi.Length == 3)
+                    if (delovi.Length == 3 && int.TryParse(delovi[2], out int kol))
                     {
                         _knjige.Add(new Knjiga
                         {
                             Naslov = delovi[0],
                             Autor = delovi[1],
-                            Kolicina = int.Parse(delovi[2])
+                            Kolicina = kol
                         });
                     }
                 }
@@ -209,28 +316,17 @@ namespace BibliotekaServer
         {
             List<string> linije = new List<string>();
             foreach (var k in _knjige)
-            {
-                // Čuvamo u formatu: Naslov|Autor|Kolicina
                 linije.Add($"{k.Naslov}|{k.Autor}|{k.Kolicina}");
-            }
-            File.WriteAllLines("knjige_baza.txt", linije);
-        }
 
+            File.WriteAllLines(KNJIGE_FAJL, linije);
+        }
 
         private static string ObradiUdpZahtev(string zahtev)
         {
             if (zahtev.StartsWith("PROVERA:"))
             {
                 string naslov = zahtev.Substring(8).Trim();
-                Knjiga? k = null;
-                foreach (var stavka in _knjige)
-                {
-                    if (stavka.Naslov.Equals(naslov, StringComparison.OrdinalIgnoreCase))
-                    {
-                        k = stavka;
-                        break; // Našli smo knjigu, prekidamo petlju
-                    }
-                }
+                var k = _knjige.Find(x => x.Naslov.Equals(naslov, StringComparison.OrdinalIgnoreCase));
 
                 if (k != null && k.Kolicina > 0)
                     return $"Knjiga '{k.Naslov}' postoji. Kolicina: {k.Kolicina}.";
@@ -259,10 +355,12 @@ namespace BibliotekaServer
             string n = Console.ReadLine() ?? "";
             Console.Write("Autor: ");
             string a = Console.ReadLine() ?? "";
-            Console.Write("Kolicina: "); 
+            Console.Write("Kolicina: ");
             int.TryParse(Console.ReadLine(), out int kol);
-            _knjige.Add(new Knjiga { Naslov = n, Autor = a, Kolicina= kol });
+
+            _knjige.Add(new Knjiga { Naslov = n, Autor = a, Kolicina = kol });
             SacuvajKnjigeUFajl();
+
             Console.WriteLine("Knjiga uspesno dodata.");
         }
 
@@ -272,12 +370,8 @@ namespace BibliotekaServer
             if (_knjige.Count == 0)
                 Console.WriteLine("Nema knjiga.");
             else
-            {
                 foreach (var k in _knjige)
-                {
                     Console.WriteLine($"[{k.Kolicina}] {k.Naslov} - {k.Autor}");
-                }
-            }
         }
     }
 }
